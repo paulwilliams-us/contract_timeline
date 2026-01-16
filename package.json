@@ -1,0 +1,16 @@
+{
+  "name": "timeline",
+  "version": "0.0.1",
+  "scripts": {
+    "build": "weweb build",
+    "serve": "weweb serve"
+  },
+  "devDependencies": {
+    "@weweb/cli": "latest"
+  },
+  "dependencies": {
+    "moment": "^2.30.1",
+    "uuid": "^13.0.0",
+    "vis-timeline": "^8.5.0"
+  }
+}
