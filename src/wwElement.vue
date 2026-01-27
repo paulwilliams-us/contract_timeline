@@ -88,17 +88,16 @@ export default {
 
         rawItems.forEach((item) => {
             // Resolve standard fields
-            // FIX: Pass { mapping: item } to ensure 'context.mapping' works in WeWeb formulas
-            const id = resolveMappingFormula(props.content?.itemsIdFormula, { mapping: item }) ?? item.id;
-            const content = resolveMappingFormula(props.content?.itemsContentFormula, { mapping: item }) ?? item.content;
-            const start = resolveMappingFormula(props.content?.itemsStartFormula, { mapping: item }) ?? item.start;
-            const end = resolveMappingFormula(props.content?.itemsEndFormula, { mapping: item }) ?? item.end;
-            const tooltip = resolveMappingFormula(props.content?.itemsTooltipFormula, { mapping: item }) ?? item.title ?? '';
+            const id = resolveMappingFormula(props.content?.itemsIdFormula, item) ?? item.id;
+            const content = resolveMappingFormula(props.content?.itemsContentFormula, item) ?? item.content;
+            const start = resolveMappingFormula(props.content?.itemsStartFormula, item) ?? item.start;
+            const end = resolveMappingFormula(props.content?.itemsEndFormula, item) ?? item.end;
+            const tooltip = resolveMappingFormula(props.content?.itemsTooltipFormula, item) ?? item.title ?? '';
             
             // Dynamic Item Styling
-            const bgColor = resolveMappingFormula(props.content?.itemsBgColorFormula, { mapping: item });
-            const textColor = resolveMappingFormula(props.content?.itemsTextColorFormula, { mapping: item });
-            const borderColor = resolveMappingFormula(props.content?.itemsBorderColorFormula, { mapping: item });
+            const bgColor = resolveMappingFormula(props.content?.itemsBgColorFormula, item);
+            const textColor = resolveMappingFormula(props.content?.itemsTextColorFormula, item);
+            const borderColor = resolveMappingFormula(props.content?.itemsBorderColorFormula, item);
             
             // Build style string if dynamic colors exist
             let style = '';
@@ -107,9 +106,9 @@ export default {
             if (textColor) style += `color: ${textColor};`;
             
             // Resolve Group Levels
-            const lvl1 = resolveMappingFormula(props.content?.groupsLevel1Formula, { mapping: item }) ?? 'Unassigned';
-            const lvl2 = resolveMappingFormula(props.content?.groupsLevel2Formula, { mapping: item }) ?? 'Unassigned';
-            const lvl3 = resolveMappingFormula(props.content?.groupsLevel3Formula, { mapping: item }) ?? 'Unassigned';
+            const lvl1 = resolveMappingFormula(props.content?.groupsLevel1Formula, item) ?? 'Unassigned';
+            const lvl2 = resolveMappingFormula(props.content?.groupsLevel2Formula, item) ?? 'Unassigned';
+            const lvl3 = resolveMappingFormula(props.content?.groupsLevel3Formula, item) ?? 'Unassigned';
 
             // Generate Group IDs
             const id1 = `g1_${String(lvl1).replace(/\s+/g, '_')}`;
