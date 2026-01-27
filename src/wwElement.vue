@@ -18,7 +18,7 @@
 </template>
 
 <script>
-import { onMounted, onUnmounted, ref, watch, computed } from "vue";
+import { onMounted, onUnmounted, ref, watch, computed, toRaw } from "vue";
 import { Timeline, DataSet } from "vis-timeline/standalone";
 import "vis-timeline/styles/vis-timeline-graph2d.css";
 // import moment from "moment"; // Not strictly needed if using native Dates, but good for manipulation
@@ -88,16 +88,17 @@ export default {
 
         rawItems.forEach((item) => {
             // Resolve standard fields
-            const id = resolveMappingFormula(props.content?.itemsIdFormula, item) ?? item.id;
-            const content = resolveMappingFormula(props.content?.itemsContentFormula, item) ?? item.content;
-            const start = resolveMappingFormula(props.content?.itemsStartFormula, item) ?? item.start;
-            const end = resolveMappingFormula(props.content?.itemsEndFormula, item) ?? item.end;
-            const tooltip = resolveMappingFormula(props.content?.itemsTooltipFormula, item) ?? item.title ?? '';
+            // FIX: Pass { mapping: item } to ensure 'context.mapping' works in WeWeb formulas
+            const id = resolveMappingFormula(props.content?.itemsIdFormula, { mapping: item }) ?? item.id;
+            const content = resolveMappingFormula(props.content?.itemsContentFormula, { mapping: item }) ?? item.content;
+            const start = resolveMappingFormula(props.content?.itemsStartFormula, { mapping: item }) ?? item.start;
+            const end = resolveMappingFormula(props.content?.itemsEndFormula, { mapping: item }) ?? item.end;
+            const tooltip = resolveMappingFormula(props.content?.itemsTooltipFormula, { mapping: item }) ?? item.title ?? '';
             
             // Dynamic Item Styling
-            const bgColor = resolveMappingFormula(props.content?.itemsBgColorFormula, item);
-            const textColor = resolveMappingFormula(props.content?.itemsTextColorFormula, item);
-            const borderColor = resolveMappingFormula(props.content?.itemsBorderColorFormula, item);
+            const bgColor = resolveMappingFormula(props.content?.itemsBgColorFormula, { mapping: item });
+            const textColor = resolveMappingFormula(props.content?.itemsTextColorFormula, { mapping: item });
+            const borderColor = resolveMappingFormula(props.content?.itemsBorderColorFormula, { mapping: item });
             
             // Build style string if dynamic colors exist
             let style = '';
@@ -106,9 +107,9 @@ export default {
             if (textColor) style += `color: ${textColor};`;
             
             // Resolve Group Levels
-            const lvl1 = resolveMappingFormula(props.content?.groupsLevel1Formula, item) ?? 'Unassigned';
-            const lvl2 = resolveMappingFormula(props.content?.groupsLevel2Formula, item) ?? 'Unassigned';
-            const lvl3 = resolveMappingFormula(props.content?.groupsLevel3Formula, item) ?? 'Unassigned';
+            const lvl1 = resolveMappingFormula(props.content?.groupsLevel1Formula, { mapping: item }) ?? 'Unassigned';
+            const lvl2 = resolveMappingFormula(props.content?.groupsLevel2Formula, { mapping: item }) ?? 'Unassigned';
+            const lvl3 = resolveMappingFormula(props.content?.groupsLevel3Formula, { mapping: item }) ?? 'Unassigned';
 
             // Generate Group IDs
             const id1 = `g1_${String(lvl1).replace(/\s+/g, '_')}`;
@@ -159,16 +160,20 @@ export default {
                     className: 'group-level-3'
                 });
             }
+            
+            // Ensure ID is present
+            const finalId = (id === undefined || id === null || id === '') ? `item_${index}` : id;
 
             // Add Item assigned to Level 3 Group via "group" property
             processedItems.push({
-                id: id,
+                id: finalId,
                 content: content,
                 title: tooltip, // Tooltip content (HTML supported)
                 start: start ? new Date(start) : new Date(),
                 end: end ? new Date(end) : null,
                 group: id3,
-                style: style // Apply dynamic styles
+                style: style, // Apply dynamic styles
+                originalItem: item // Store original item for events
             });
         });
         
@@ -215,7 +220,18 @@ export default {
             if (properties.items && properties.items.length > 0) {
                  const selectedId = properties.items[0];
                  const selectedObj = timelineItems.value.items.find(i => i.id == selectedId);
-                 emit('trigger-event', { name: 'onItemSelect', event: { item: selectedObj, id: selectedId } });
+                 
+                 if (!selectedObj) {
+                    console.warn('Timeline: Selected item not found', selectedId);
+                 }
+                 
+                 emit('trigger-event', { 
+                     name: 'onItemSelect', 
+                     event: { 
+                        item: selectedObj ? toRaw(selectedObj.originalItem) : {}, 
+                        id: selectedId 
+                     } 
+                 });
             }
         });
 
@@ -223,7 +239,14 @@ export default {
             if (properties.item) {
                  const selectedId = properties.item;
                  const selectedObj = timelineItems.value.items.find(i => i.id == selectedId);
-                 emit('trigger-event', { name: 'onItemDoubleClick', event: { item: selectedObj, id: selectedId } });
+                 
+                 emit('trigger-event', { 
+                     name: 'onItemDoubleClick', 
+                     event: { 
+                        item: selectedObj ? toRaw(selectedObj.originalItem) : {}, 
+                        id: selectedId 
+                     } 
+                 });
             } else if (properties.what === 'background' || properties.what === 'axis') {
                  // Double click on empty space -> Create new item at this time
                  emit('trigger-event', { 
