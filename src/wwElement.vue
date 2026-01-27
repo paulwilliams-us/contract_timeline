@@ -39,8 +39,6 @@ export default {
     
     // NOTE: Removed groupsDataSet as requested to simplify
 
-    const { resolveMappingFormula } = wwLib.wwFormula.useFormula();
-
     /* wwEditor:start */
     const isEditing = computed(() => props.wwEditorState.isEditing);
     /* wwEditor:end */
@@ -81,14 +79,20 @@ export default {
 
     const timelineItems = computed(() => {
         const rawItems = props.content?.items || [];
+        // STRICT: useFormula inside computed (as per WeWeb docs)
+        const { resolveMappingFormula } = wwLib.wwFormula.useFormula();
+
         if (!Array.isArray(rawItems)) return { items: [], groups: [] };
 
         const groupsMap = new Map();
-        const processedItems = [];
-
-        rawItems.forEach((item) => {
+        
+        // STRICT: Use .map for items processing
+        const processedItems = rawItems.map((item, index) => {
             // Resolve standard fields
-            const id = resolveMappingFormula(props.content?.itemsIdFormula, item) ?? item.id;
+            // Standard pattern: formula first, then item property
+            const idParam = resolveMappingFormula(props.content?.itemsIdFormula, item);
+            const id = idParam || item.id;
+            
             const content = resolveMappingFormula(props.content?.itemsContentFormula, item) ?? item.content;
             const start = resolveMappingFormula(props.content?.itemsStartFormula, item) ?? item.start;
             const end = resolveMappingFormula(props.content?.itemsEndFormula, item) ?? item.end;
@@ -102,7 +106,7 @@ export default {
             // Build style string if dynamic colors exist
             let style = '';
             if (bgColor) style += `background-color: ${bgColor}; border-color: ${bgColor};`;
-            if (borderColor) style += `border-color: ${borderColor};`; // Override border if specific
+            if (borderColor) style += `border-color: ${borderColor};`; 
             if (textColor) style += `color: ${textColor};`;
             
             // Resolve Group Levels
@@ -116,41 +120,35 @@ export default {
             const id3 = `g3_${String(lvl1).replace(/\s+/g, '_')}_${String(lvl2).replace(/\s+/g, '_')}_${String(lvl3).replace(/\s+/g, '_')}`;
 
             // Build Group Structure
-            // Level 1 (Top)
+            // Level 1
             if (!groupsMap.has(id1)) {
                 groupsMap.set(id1, {
                     id: id1,
                     content: lvl1,
                     treeLevel: 1,
-                    nestedGroups: [], // Will hold id2s
+                    nestedGroups: [], 
                     className: 'group-level-1'
                 });
             }
             
-            // Level 2 (Middle)
+            // Level 2
             if (!groupsMap.has(id2)) {
-                // Link to Parent L1
                 const parent = groupsMap.get(id1);
-                if (!parent.nestedGroups.includes(id2)) {
-                    parent.nestedGroups.push(id2);
-                }
+                if (!parent.nestedGroups.includes(id2)) parent.nestedGroups.push(id2);
                 
                 groupsMap.set(id2, {
                     id: id2,
                     content: lvl2,
                     treeLevel: 2,
-                    nestedGroups: [], // Will hold id3s
+                    nestedGroups: [],
                     className: 'group-level-2'
                 });
             }
 
-            // Level 3 (Bottom - where items live)
+            // Level 3
             if (!groupsMap.has(id3)) {
-                // Link to Parent L2
                 const parent = groupsMap.get(id2);
-                if (!parent.nestedGroups.includes(id3)) {
-                    parent.nestedGroups.push(id3);
-                }
+                if (!parent.nestedGroups.includes(id3)) parent.nestedGroups.push(id3);
 
                 groupsMap.set(id3, {
                     id: id3,
@@ -160,20 +158,20 @@ export default {
                 });
             }
             
-            // Ensure ID is present
-            const finalId = (id === undefined || id === null || id === '') ? `item_${index}` : id;
+            // STRICT: ID Fallback using logical OR to catch empty strings/null/undefined
+            // This ensures we NEVER have an item with a missing id
+            const finalId = id || `item_${Date.now()}_${index}`;
 
-            // Add Item assigned to Level 3 Group via "group" property
-            processedItems.push({
+            return {
                 id: finalId,
                 content: content,
-                title: tooltip, // Tooltip content (HTML supported)
+                title: tooltip,
                 start: start ? new Date(start) : new Date(),
                 end: end ? new Date(end) : null,
                 group: id3,
-                style: style, // Apply dynamic styles
-                originalItem: item // Store original item for events
-            });
+                style: style,
+                originalItem: item // Essential: Store original item
+            };
         });
         
         return {
