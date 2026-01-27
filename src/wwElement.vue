@@ -162,7 +162,7 @@ export default {
             // This ensures we NEVER have an item with a missing id
             const finalId = id || `item_${Date.now()}_${index}`;
 
-            return {
+            const processedItem = {
                 id: finalId,
                 content: content,
                 title: tooltip,
@@ -170,10 +170,14 @@ export default {
                 end: end ? new Date(end) : null,
                 group: id3,
                 style: style,
-                originalItem: item // Essential: Store original item
+                originalItem: toRaw(item) // Essential: Store original item RAW to avoid proxy issues
             };
+            
+            return processedItem;
         });
         
+        console.log('Timeline: Processed Items (First 2):', processedItems.slice(0, 2));
+
         return {
             items: processedItems,
             groups: Array.from(groupsMap.values())
@@ -220,12 +224,14 @@ export default {
                  
                  if (!selectedObj) {
                     console.warn('Timeline: Selected item not found', selectedId);
+                 } else {
+                    console.log('Timeline: Selected Item Found', selectedObj);
                  }
                  
                  emit('trigger-event', { 
                      name: 'onItemSelect', 
                      event: { 
-                        item: selectedObj ? toRaw(selectedObj.originalItem) : {}, 
+                        item: selectedObj ? selectedObj.originalItem : {}, 
                         id: selectedId 
                      } 
                  });
@@ -237,10 +243,12 @@ export default {
                  const selectedId = properties.item;
                  const selectedObj = timelineItems.value.items.find(i => i.id == selectedId);
                  
+                 console.log('Timeline: DoubleClick', selectedId, selectedObj);
+
                  emit('trigger-event', { 
                      name: 'onItemDoubleClick', 
                      event: { 
-                        item: selectedObj ? toRaw(selectedObj.originalItem) : {}, 
+                        item: selectedObj ? selectedObj.originalItem : {}, 
                         id: selectedId 
                      } 
                  });
