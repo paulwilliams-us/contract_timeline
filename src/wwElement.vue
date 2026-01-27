@@ -163,6 +163,7 @@ export default {
             const finalId = id || `item_${Date.now()}_${index}`;
 
             const processedItem = {
+                ...item, // Spread original properties first (WeWeb pattern deviation fix)
                 id: finalId,
                 content: content,
                 title: tooltip,
@@ -228,10 +229,13 @@ export default {
                     console.log('Timeline: Selected Item Found', selectedObj);
                  }
                  
+                 // Deep clone to remove any Proxy/Reference weirdness
+                 const payload = selectedObj ? JSON.parse(JSON.stringify(selectedObj.originalItem)) : {};
+
                  emit('trigger-event', { 
                      name: 'onItemSelect', 
                      event: { 
-                        item: selectedObj ? selectedObj.originalItem : {}, 
+                        item: payload, 
                         id: selectedId 
                      } 
                  });
@@ -245,10 +249,13 @@ export default {
                  
                  console.log('Timeline: DoubleClick', selectedId, selectedObj);
 
+                 // Deep clone to remove any Proxy/Reference weirdness
+                 const payload = selectedObj ? JSON.parse(JSON.stringify(selectedObj.originalItem)) : {};
+
                  emit('trigger-event', { 
                      name: 'onItemDoubleClick', 
                      event: { 
-                        item: selectedObj ? selectedObj.originalItem : {}, 
+                        item: payload, 
                         id: selectedId 
                      } 
                  });
