@@ -21,7 +21,6 @@
 import { onMounted, onUnmounted, ref, watch, computed, toRaw } from "vue";
 import { Timeline, DataSet } from "vis-timeline/standalone";
 import "vis-timeline/styles/vis-timeline-graph2d.css";
-// import moment from "moment"; // Not strictly needed if using native Dates, but good for manipulation
 
 export default {
   props: {
@@ -36,12 +35,28 @@ export default {
     let timelineInstance = null;
     let itemsDataSet = new DataSet([]);
     let groupsDataSet = new DataSet([]);
-    
-    // NOTE: Removed groupsDataSet as requested to simplify
 
     /* wwEditor:start */
     const isEditing = computed(() => props.wwEditorState.isEditing);
     /* wwEditor:end */
+
+    // MUST be called once in setup scope, NOT inside computed
+    const { resolveMappingFormula } = wwLib.wwFormula.useFormula();
+
+    // MANDATORY: Expose internal variables for NoCode workflow access
+    const { value: selectedItem, setValue: setSelectedItem } = wwLib.wwVariable.useComponentVariable({
+      uid: props.uid,
+      name: 'selectedItem',
+      type: 'object',
+      defaultValue: null,
+    });
+
+    const { value: selectedId, setValue: setSelectedId } = wwLib.wwVariable.useComponentVariable({
+      uid: props.uid,
+      name: 'selectedId',
+      type: 'string',
+      defaultValue: '',
+    });
 
     const customStyle = computed(() => {
       return {
@@ -79,8 +94,6 @@ export default {
 
     const timelineItems = computed(() => {
         const rawItems = props.content?.items || [];
-        // STRICT: useFormula inside computed (as per WeWeb docs)
-        const { resolveMappingFormula } = wwLib.wwFormula.useFormula();
 
         if (!Array.isArray(rawItems)) return { items: [], groups: [] };
 
@@ -162,8 +175,10 @@ export default {
             // This ensures we NEVER have an item with a missing id
             const finalId = id || `item_${Date.now()}_${index}`;
 
+            // Build vis-timeline object from resolved values only.
+            // Do NOT spread ...item — it may contain keys like 'type', 'className',
+            // 'editable', 'selectable' that conflict with vis-timeline internals.
             const processedItem = {
-                ...item, // Spread original properties first (WeWeb pattern deviation fix)
                 id: finalId,
                 content: content,
                 title: tooltip,
@@ -171,14 +186,12 @@ export default {
                 end: end ? new Date(end) : null,
                 group: id3,
                 style: style,
-                originalItem: toRaw(item) // Essential: Store original item RAW to avoid proxy issues
+                originalItem: toRaw(item),
             };
             
             return processedItem;
         });
         
-        console.log('Timeline: Processed Items (First 2):', processedItems.slice(0, 2));
-
         return {
             items: processedItems,
             groups: Array.from(groupsMap.values())
@@ -206,12 +219,12 @@ export default {
             },
             margin: {
                 item: {
-                    vertical: parseInt(props.content.itemVerticalMargin) || 10,
-                    horizontal: 10 // Keeping horizontal standard for now
+                    vertical: parseInt(props.content?.itemVerticalMargin) || 10,
+                    horizontal: 10
                 }
             },
-            verticalScroll: props.content.verticalScroll,
-            horizontalScroll: props.content.horizontalScroll,
+            verticalScroll: props.content?.verticalScroll ?? true,
+            horizontalScroll: props.content?.horizontalScroll ?? true,
         };
 
         // Initialize with both Items and Groups
@@ -220,44 +233,44 @@ export default {
         
         timelineInstance.on('select', (properties) => {
             if (properties.items && properties.items.length > 0) {
-                 const selectedId = properties.items[0];
-                 const selectedObj = timelineItems.value.items.find(i => i.id == selectedId);
-                 
-                 if (!selectedObj) {
-                    console.warn('Timeline: Selected item not found', selectedId);
-                 } else {
-                    console.log('Timeline: Selected Item Found', selectedObj);
-                 }
-                 
+                 const clickedId = properties.items[0];
+                 const selectedObj = timelineItems.value.items.find(i => String(i.id) === String(clickedId));
+
                  // Deep clone to remove any Proxy/Reference weirdness
                  const payload = selectedObj ? JSON.parse(JSON.stringify(selectedObj.originalItem)) : {};
 
-                 emit('trigger-event', { 
-                     name: 'onItemSelect', 
-                     event: { 
-                        item: payload, 
-                        id: selectedId 
-                     } 
+                 // Update component variables so workflows can access them
+                 setSelectedId(String(clickedId));
+                 setSelectedItem(payload);
+
+                 emit('trigger-event', {
+                     name: 'onItemSelect',
+                     event: {
+                        item: payload,
+                        id: clickedId
+                     }
                  });
             }
         });
 
         timelineInstance.on('doubleClick', (properties) => {
             if (properties.item) {
-                 const selectedId = properties.item;
-                 const selectedObj = timelineItems.value.items.find(i => i.id == selectedId);
-                 
-                 console.log('Timeline: DoubleClick', selectedId, selectedObj);
+                 const clickedId = properties.item;
+                 const selectedObj = timelineItems.value.items.find(i => String(i.id) === String(clickedId));
 
                  // Deep clone to remove any Proxy/Reference weirdness
                  const payload = selectedObj ? JSON.parse(JSON.stringify(selectedObj.originalItem)) : {};
 
-                 emit('trigger-event', { 
-                     name: 'onItemDoubleClick', 
-                     event: { 
-                        item: payload, 
-                        id: selectedId 
-                     } 
+                 // Update component variables so workflows can access them
+                 setSelectedId(String(clickedId));
+                 setSelectedItem(payload);
+
+                 emit('trigger-event', {
+                     name: 'onItemDoubleClick',
+                     event: {
+                        item: payload,
+                        id: clickedId
+                     }
                  });
             } else if (properties.what === 'background' || properties.what === 'axis') {
                  // Double click on empty space -> Create new item at this time
@@ -284,12 +297,11 @@ export default {
         });
     };
 
-    // Watch for items AND config changes to rebuild data
+    // Watch for items changes to rebuild DataSets
     watch(timelineItems, (data) => {
-        console.log('UseWeWeb: Data updated', data);
         if (data) {
              const { items, groups } = data;
-             
+
              // Update Groups
              groupsDataSet.clear();
              if (groups && groups.length > 0) {
@@ -301,13 +313,9 @@ export default {
              if (items && items.length > 0) {
                  itemsDataSet.add(items);
              }
-             
+
              if (timelineInstance) {
-                // If this is the FIRST load or meaningful update, apply zoom
-                // You might want a flag to prevent re-zooming on every small update if desired
-                // But for now, ensuring the view is correct is key.
-                applyZoomLevel(); 
-                timelineInstance.redraw(); 
+                timelineInstance.redraw();
              }
         }
     }, { deep: true, immediate: true });
@@ -320,12 +328,12 @@ export default {
              timelineInstance.setOptions({
                 margin: {
                     item: {
-                        vertical: parseInt(props.content.itemVerticalMargin) || 10,
+                        vertical: parseInt(props.content?.itemVerticalMargin) || 10,
                         horizontal: 10
                     }
                 },
-                verticalScroll: props.content.verticalScroll,
-                horizontalScroll: props.content.horizontalScroll
+                verticalScroll: props.content?.verticalScroll ?? true,
+                horizontalScroll: props.content?.horizontalScroll ?? true
              });
              timelineInstance.redraw(); 
         }
@@ -411,31 +419,23 @@ export default {
         }
     });
 
+    let resizeObserver = null;
+
     onMounted(() => {
         initTimeline();
-        // Initial load
-        groupsDataSet.clear();
-        if (timelineItems.value.groups) {
-             groupsDataSet.add(timelineItems.value.groups);
-        }
-        itemsDataSet.clear();
-        if (timelineItems.value.items) {
-            itemsDataSet.add(timelineItems.value.items);
-        }
-        
-        // Apply initial zoom
+
+        // The timelineItems watcher (immediate: true) already loaded data.
+        // Just apply initial zoom and redraw after layout settles.
         applyZoomLevel();
 
-        // Force a redraw after a tick to ensure flex layout is calculated
         setTimeout(() => {
              if (timelineInstance) {
                 timelineInstance.redraw();
-                console.log('UseWeWeb: Timeline redrawn. Container height:', timelineContainer.value?.offsetHeight);
              }
-        }, 500); // Increased timeout to 500ms to be safe
+        }, 200);
 
         // Responsive handling
-        const resizeObserver = new ResizeObserver(() => {
+        resizeObserver = new ResizeObserver(() => {
             if (timelineInstance) {
                 timelineInstance.redraw();
             }
@@ -446,18 +446,22 @@ export default {
     });
 
     onUnmounted(() => {
+        if (resizeObserver) {
+            resizeObserver.disconnect();
+            resizeObserver = null;
+        }
         if (timelineInstance) {
             timelineInstance.destroy();
+            timelineInstance = null;
         }
     });
 
     return {
       timelineContainer,
       customStyle,
-      setZoom: (val)=>currentZoom.value=val, // Keep for compatibility if needed, though strictly internal now
       move,
       zoom,
-      adjustWindow
+      adjustWindow,
     };
   },
 };
@@ -539,11 +543,9 @@ export default {
       background-color: var(--item-bg-color);
       border-color: var(--item-border-color); /* Usually same as BG for flat look */
       color: var(--item-text-color);
-      border-radius: var(--item-border-radius); /* Configurable Radius */
-      border-radius: var(--item-border-radius); /* Configurable Radius */
-      font-size: var(--global-font-size); /* Use Global Font Size */
-      box-shadow: 0 1px 2px rgba(0,0,0,0.05); /* Subtle depth */
-      box-shadow: 0 1px 2px rgba(0,0,0,0.05); /* Subtle depth */
+      border-radius: var(--item-border-radius);
+      font-size: var(--global-font-size);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
       border-width: 1px;
       
       /* Flex layout for content */

@@ -459,9 +459,25 @@ export default {
     },
   },
   triggerEvents: [
-    { name: 'onItemSelect', label: { en: 'On Item Select' }, event: { item: {}, id: '' } },
-    { name: 'onItemDoubleClick', label: { en: 'On Item Double Click' }, event: { item: {}, id: '' } },
-    { name: 'onBackgroundClick', label: { en: 'On Background Click' }, event: { time: null, group: null } },
-    { name: 'onTimeSelect', label: { en: 'On Time Select (Double Click)' }, event: { time: null, group: null } },
+    {
+      name: 'onItemSelect',
+      label: { en: 'On Item Select' },
+      event: { item: { id: '', content: '', start: '', end: '', group: '' }, id: '' },
+    },
+    {
+      name: 'onItemDoubleClick',
+      label: { en: 'On Item Double Click' },
+      event: { item: { id: '', content: '', start: '', end: '', group: '' }, id: '' },
+    },
+    {
+      name: 'onBackgroundClick',
+      label: { en: 'On Background Click' },
+      event: { time: '', group: '' },
+    },
+    {
+      name: 'onTimeSelect',
+      label: { en: 'On Time Select (Double Click)' },
+      event: { time: '', group: '' },
+    },
   ],
 };
